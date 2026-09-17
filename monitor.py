@@ -1,25 +1,19 @@
 """
-ベイブレード関連商品限定 Amazon在庫復活監視 → X自動投稿
+ベイブレード関連商品限定 Amazon在庫復活チェック(通知専用・X投稿なし)
 
 判定条件:
   1. カートボタンが存在し、かつ在庫切れ表記がない(在庫あり)
   2. 出品者が Amazon.co.jp 自身、または Prime バッジがある(Prime発送)
-  両方を満たし、かつ「前回は在庫なしだった」場合のみ X に投稿する。
 
-必要な環境変数(GitHub Secretsで渡す):
-  AMAZON_ASSOCIATE_TAG : 自分のAmazonアソシエイトタグ
-  X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET : X API(OAuth1.0a, Read/Write権限)
+判定結果を state.json に書き込むだけ。通知は watcher.html 側(ブラウザ)が担当する。
 """
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urlencode
 
 import requests
-import tweepy
 from bs4 import BeautifulSoup
 
 ASIN_FILE = Path("asins.json")
@@ -33,8 +27,6 @@ HEADERS = {
     ),
     "Accept-Language": "ja-JP,ja;q=0.9",
 }
-
-AMAZON_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG", "")
 
 
 def load_json(path: Path, default):
@@ -70,22 +62,7 @@ def check_product(asin: str) -> dict:
     title_el = soup.select_one("#productTitle")
     title = title_el.get_text(strip=True) if title_el else asin
 
-    return {"in_stock": in_stock, "is_prime": is_prime, "title": title, "url": url}
-
-
-def build_affiliate_url(url: str) -> str:
-    sep = "&" if "?" in url else "?"
-    return f"{url}{sep}{urlencode({'tag': AMAZON_TAG})}"
-
-
-def post_tweet(text: str) -> None:
-    client = tweepy.Client(
-        consumer_key=os.environ["X_API_KEY"],
-        consumer_secret=os.environ["X_API_SECRET"],
-        access_token=os.environ["X_ACCESS_TOKEN"],
-        access_token_secret=os.environ["X_ACCESS_SECRET"],
-    )
-    client.create_tweet(text=text)
+    return {"in_stock": in_stock, "is_prime": is_prime, "title": title}
 
 
 def main() -> None:
@@ -96,27 +73,12 @@ def main() -> None:
         asin = item["asin"]
         try:
             result = check_product(asin)
+            state[asin] = {"in_stock": result["in_stock"], "is_prime": result["is_prime"]}
+            print(f"[OK] {asin}: 在庫{'あり' if result['in_stock'] else 'なし'} / "
+                  f"Prime{'○' if result['is_prime'] else '×'}")
         except Exception as e:  # noqa: BLE001
             print(f"[WARN] {asin}: 取得失敗 {e}", file=sys.stderr)
-            time.sleep(REQUEST_INTERVAL_SEC)
-            continue
 
-        prev_in_stock = state.get(asin, {}).get("in_stock", False)
-
-        if result["in_stock"] and result["is_prime"] and not prev_in_stock:
-            affiliate_url = build_affiliate_url(result["url"])
-            text = (
-                f"復活！【Prime】{result['title'][:60]}\n"
-                f"{affiliate_url}\n"
-                f"#ベイブレードX #BEYBLADEX"
-            )
-            try:
-                post_tweet(text)
-                print(f"[POST] {asin}: {result['title']}")
-            except Exception as e:  # noqa: BLE001
-                print(f"[ERROR] {asin}: 投稿失敗 {e}", file=sys.stderr)
-
-        state[asin] = {"in_stock": result["in_stock"], "is_prime": result["is_prime"]}
         time.sleep(REQUEST_INTERVAL_SEC)
 
     save_json(STATE_FILE, state)

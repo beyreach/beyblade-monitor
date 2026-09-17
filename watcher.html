@@ -149,6 +149,48 @@
     line-height: 1.7;
   }
 
+  .editor {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .editor.closed { display: none; }
+  .editor h2 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .editor p.hint { font-size: 12px; color: var(--text-dim); margin: 0 0 14px; line-height: 1.6; }
+  .editor-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .editor-row input {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 9px 10px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+  }
+  .editor-row input.asin { flex: 0 0 130px; }
+  .editor-row input.name { flex: 1; }
+  .editor-add { display: flex; gap: 8px; margin-top: 12px; }
+  .editor-add input { flex: 1; }
+  .editor-add input.asin { flex: 0 0 130px; }
+  .editor-list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .editor-list-item .a { color: var(--text-dim); flex: 0 0 110px; font-family: 'Rajdhani', sans-serif; }
+  .editor-list-item .n { flex: 1; }
+  .editor-list-item button { padding: 4px 10px; font-size: 11px; }
+  .editor-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .editor-actions button { flex: 1; }
+
   footer {
     margin-top: 24px;
     font-size: 12px;
@@ -171,6 +213,7 @@
 
   <div class="toolbar">
     <button id="toggleConfig">設定</button>
+    <button id="toggleEditor">監視リスト編集</button>
     <button id="checkNow" class="primary">今すぐ確認</button>
   </div>
 
@@ -198,6 +241,21 @@
     <label style="margin-top:14px;"><input type="checkbox" id="soundToggle" checked style="width:auto; margin-right:6px;">通知音を鳴らす</label>
   </div>
 
+  <div class="editor closed" id="editorPanel">
+    <h2>監視リストを編集</h2>
+    <p class="hint">ここで追加してもこのアプリの表示が変わるだけです。実際にGitHub Actionsが監視するには、下のボタンでGitHubの`asins.json`にも反映してください。</p>
+    <div id="editorList"></div>
+    <div class="editor-add">
+      <input class="asin" id="newAsin" placeholder="ASIN(10桁)">
+      <input class="name" id="newName" placeholder="商品名">
+      <button id="addAsinBtn">追加</button>
+    </div>
+    <div class="editor-actions">
+      <button id="copyJsonBtn">JSONをコピー</button>
+      <button id="openGithubEditBtn" class="primary">GitHubで編集を開く</button>
+    </div>
+  </div>
+
   <div class="list" id="list">
     <div class="empty">GitHubユーザー名とリポジトリ名を設定すると、監視中のASINがここに表示されます。</div>
   </div>
@@ -209,6 +267,7 @@
 const $ = (id) => document.getElementById(id);
 const LS_KEY = 'beywatch_config_v1';
 const SEEN_KEY = 'beywatch_seen_v1';
+const EDITOR_KEY = 'beywatch_editor_v1';
 
 let pollTimer = null;
 let items = []; // merged asin list
@@ -234,6 +293,81 @@ function saveConfig() {
   localStorage.setItem(LS_KEY, JSON.stringify(cfg));
   return cfg;
 }
+
+function loadEditorList() {
+  return JSON.parse(localStorage.getItem(EDITOR_KEY) || '[]');
+}
+
+function saveEditorList(list) {
+  localStorage.setItem(EDITOR_KEY, JSON.stringify(list));
+}
+
+function renderEditor() {
+  const list = loadEditorList();
+  const el = $('editorList');
+  if (!list.length) {
+    el.innerHTML = '<p class="hint" style="margin-top:0;">まだ何も追加されていません。</p>';
+    return;
+  }
+  el.innerHTML = '';
+  list.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'editor-list-item';
+    row.innerHTML = `<span class="a">${item.asin}</span><span class="n">${item.name}</span>`;
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '削除';
+    delBtn.onclick = () => {
+      const l = loadEditorList();
+      l.splice(idx, 1);
+      saveEditorList(l);
+      renderEditor();
+    };
+    row.appendChild(delBtn);
+    el.appendChild(row);
+  });
+}
+
+function seedEditorFromFetched(asins) {
+  // 初回のみ: 取得済みのasins.jsonの内容を編集リストの初期値にする
+  if (loadEditorList().length === 0 && asins.length) {
+    saveEditorList(asins.map(a => ({ asin: a.asin, name: a.name })));
+  }
+}
+
+$('addAsinBtn').onclick = () => {
+  const asin = $('newAsin').value.trim();
+  const name = $('newName').value.trim();
+  if (!asin || !name) return;
+  const list = loadEditorList();
+  if (list.some(i => i.asin === asin)) { alert('このASINはすでにリストにあります'); return; }
+  list.push({ asin, name });
+  saveEditorList(list);
+  $('newAsin').value = '';
+  $('newName').value = '';
+  renderEditor();
+};
+
+$('copyJsonBtn').onclick = async () => {
+  const json = JSON.stringify(loadEditorList(), null, 2);
+  try {
+    await navigator.clipboard.writeText(json);
+    alert('コピーしました。GitHubのasins.json編集画面に貼り付けてください。');
+  } catch (e) {
+    prompt('自動コピーできませんでした。以下を手動でコピーしてください:', json);
+  }
+};
+
+$('openGithubEditBtn').onclick = () => {
+  const cfg = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+  if (!cfg.owner || !cfg.repo) { alert('先に設定でGitHubユーザー名とリポジトリ名を入力してください'); return; }
+  const branch = cfg.branch || 'main';
+  window.open(`https://github.com/${cfg.owner}/${cfg.repo}/edit/${branch}/asins.json`, '_blank');
+};
+
+$('toggleEditor').onclick = () => {
+  $('editorPanel').classList.toggle('open');
+  $('editorPanel').classList.toggle('closed');
+};
 
 function setStatus(state, text) {
   const dot = $('statusDot');
@@ -313,6 +447,8 @@ async function poll() {
       fetchJson(`${base}/state.json?_=${Date.now()}`),
     ]);
 
+    seedEditorFromFetched(asins);
+
     const newSeen = { ...seen };
     let anyChange = false;
 
@@ -361,6 +497,7 @@ if (window.Notification && Notification.permission === 'default') {
 }
 
 loadConfig();
+renderEditor();
 restartPolling();
 </script>
 </body>
