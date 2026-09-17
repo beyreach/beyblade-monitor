@@ -1,0 +1,32 @@
+name: Beyblade Stock Monitor
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # 15分おき。頻度を変えたい場合はここを編集
+  workflow_dispatch: {}      # 手動実行ボタン(iPhoneのGitHubアプリからも可)
+
+permissions:
+  contents: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Run monitor
+        run: python monitor.py
+
+      - name: Commit updated state
+        run: |
+          git config user.name "beyblade-monitor-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add state.json
+          git diff --cached --quiet || git commit -m "update stock state"
+          git push
