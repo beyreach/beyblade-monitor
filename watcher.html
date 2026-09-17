@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>入荷監視 — BEY WATCH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f16;
+    --panel: #161a24;
+    --panel-2: #1d2230;
+    --line: #2a3040;
+    --text: #e9edf5;
+    --text-dim: #8891a6;
+    --spark: #ff5a1f;
+    --volt: #33d6ff;
+    --ok: #3ee08a;
+    --warn: #ffb84d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 28px 18px 80px; }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 22px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 16px;
+  }
+  h1 {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: 0.5px;
+    margin: 0;
+    background: linear-gradient(90deg, var(--text) 60%, var(--volt));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .status-pill {
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
+  .dot.live { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot.err { background: var(--spark); }
+
+  .config {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 16px;
+    margin-bottom: 20px;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  }
+  .config.open { display: block; }
+  .config.closed { display: none; }
+  .config label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin: 10px 0 4px;
+  }
+  .config input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 9px 10px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+  }
+  .config input:focus { outline: 1px solid var(--volt); border-color: var(--volt); }
+  .config-row { display: flex; gap: 10px; }
+  .config-row > div { flex: 1; }
+
+  .toolbar { display: flex; gap: 8px; margin-bottom: 18px; }
+  button {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.3px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    padding: 9px 16px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--volt); color: var(--volt); }
+  button.primary { background: var(--volt); color: #06222b; border-color: var(--volt); }
+  button.primary:hover { opacity: 0.9; color: #06222b; }
+  button:focus-visible { outline: 2px solid var(--volt); outline-offset: 2px; }
+
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .item {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--line);
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    transition: border-left-color 0.3s, background 0.3s;
+  }
+  .item.instock { border-left-color: var(--ok); }
+  .item.flash { background: var(--panel-2); animation: pulse 1.4s ease-in-out 2; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(51,214,138,0); }
+    50% { box-shadow: 0 0 0 3px rgba(62,224,138,0.35); }
+  }
+  .item-name { font-size: 14px; line-height: 1.4; }
+  .item-meta { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+  .badges { display: flex; gap: 6px; flex-shrink: 0; }
+  .badge {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.4px;
+    padding: 3px 8px;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+  }
+  .badge.on.stock { color: var(--ok); border-color: var(--ok); }
+  .badge.on.prime { color: var(--volt); border-color: var(--volt); }
+
+  .actions { display: flex; gap: 6px; }
+  .actions button { padding: 6px 10px; font-size: 12px; }
+
+  .empty {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 60px 20px;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  footer {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .item.flash { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>BEY WATCH</h1>
+    <div class="status-pill"><span class="dot" id="statusDot"></span><span id="statusText">未接続</span></div>
+  </header>
+
+  <div class="toolbar">
+    <button id="toggleConfig">設定</button>
+    <button id="checkNow" class="primary">今すぐ確認</button>
+  </div>
+
+  <div class="config closed" id="configPanel">
+    <div class="config-row">
+      <div>
+        <label for="owner">GitHubユーザー名</label>
+        <input id="owner" placeholder="例: kidzakki">
+      </div>
+      <div>
+        <label for="repo">リポジトリ名</label>
+        <input id="repo" placeholder="例: beyblade-monitor">
+      </div>
+    </div>
+    <div class="config-row">
+      <div>
+        <label for="branch">ブランチ</label>
+        <input id="branch" placeholder="main" value="main">
+      </div>
+      <div>
+        <label for="interval">確認間隔(秒)</label>
+        <input id="interval" type="number" min="15" value="30">
+      </div>
+    </div>
+    <label style="margin-top:14px;"><input type="checkbox" id="soundToggle" checked style="width:auto; margin-right:6px;">通知音を鳴らす</label>
+  </div>
+
+  <div class="list" id="list">
+    <div class="empty">GitHubユーザー名とリポジトリ名を設定すると、監視中のASINがここに表示されます。</div>
+  </div>
+
+  <footer>state.json / asins.json を raw.githubusercontent.com から定期取得します。このタブを開いている間だけ動作します。</footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const LS_KEY = 'beywatch_config_v1';
+const SEEN_KEY = 'beywatch_seen_v1';
+
+let pollTimer = null;
+let items = []; // merged asin list
+let seen = JSON.parse(localStorage.getItem(SEEN_KEY) || '{}');
+
+function loadConfig() {
+  const cfg = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+  $('owner').value = cfg.owner || '';
+  $('repo').value = cfg.repo || '';
+  $('branch').value = cfg.branch || 'main';
+  $('interval').value = cfg.interval || 30;
+  $('soundToggle').checked = cfg.sound !== false;
+}
+
+function saveConfig() {
+  const cfg = {
+    owner: $('owner').value.trim(),
+    repo: $('repo').value.trim(),
+    branch: $('branch').value.trim() || 'main',
+    interval: Math.max(15, parseInt($('interval').value, 10) || 30),
+    sound: $('soundToggle').checked,
+  };
+  localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+  return cfg;
+}
+
+function setStatus(state, text) {
+  const dot = $('statusDot');
+  dot.className = 'dot' + (state ? ' ' + state : '');
+  $('statusText').textContent = text;
+}
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(880, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12);
+    g.gain.setValueAtTime(0.15, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + 0.5);
+  } catch (e) { /* audio unavailable, skip silently */ }
+}
+
+function notify(title, body) {
+  if (window.Notification && Notification.permission === 'granted') {
+    new Notification(title, { body });
+  }
+}
+
+function render() {
+  const listEl = $('list');
+  if (!items.length) {
+    listEl.innerHTML = '<div class="empty">監視対象がありません。設定を確認してください。</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  items.forEach((it) => {
+    const div = document.createElement('div');
+    div.className = 'item' + (it.in_stock ? ' instock' : '') + (it.justChanged ? ' flash' : '');
+    const url = `https://www.amazon.co.jp/dp/${it.asin}`;
+    div.innerHTML = `
+      <div>
+        <div class="item-name">${it.name}</div>
+        <div class="item-meta">${it.asin}</div>
+      </div>
+      <div class="badges">
+        <span class="badge ${it.in_stock ? 'on stock' : ''}">${it.in_stock ? '在庫あり' : '在庫なし'}</span>
+        <span class="badge ${it.is_prime ? 'on prime' : ''}">${it.is_prime ? 'Prime' : '-'}</span>
+      </div>
+    `;
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const openBtn = document.createElement('button');
+    openBtn.textContent = '商品ページ';
+    openBtn.onclick = () => window.open(url, '_blank');
+    actions.appendChild(openBtn);
+    div.appendChild(actions);
+    listEl.appendChild(div);
+  });
+}
+
+async function fetchJson(rawUrl) {
+  const res = await fetch(rawUrl, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function poll() {
+  const cfg = saveConfig();
+  if (!cfg.owner || !cfg.repo) {
+    setStatus('err', '設定未入力');
+    return;
+  }
+  const base = `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}`;
+  try {
+    const [asins, state] = await Promise.all([
+      fetchJson(`${base}/asins.json?_=${Date.now()}`),
+      fetchJson(`${base}/state.json?_=${Date.now()}`),
+    ]);
+
+    const newSeen = { ...seen };
+    let anyChange = false;
+
+    items = asins.map((a) => {
+      const s = state[a.asin] || { in_stock: false, is_prime: false };
+      const prev = seen[a.asin] || { in_stock: false };
+      const justRestocked = s.in_stock && s.is_prime && !prev.in_stock;
+      if (justRestocked) {
+        anyChange = true;
+        notify('入荷復活: ' + a.name, 'Prime対応で在庫が復活しました');
+      }
+      newSeen[a.asin] = { in_stock: s.in_stock };
+      return { asin: a.asin, name: a.name, in_stock: s.in_stock, is_prime: s.is_prime, justChanged: justRestocked };
+    });
+
+    seen = newSeen;
+    localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
+
+    if (anyChange && cfg.sound) beep();
+
+    setStatus('live', '接続中 — ' + new Date().toLocaleTimeString('ja-JP'));
+    render();
+  } catch (e) {
+    setStatus('err', '取得失敗: ' + e.message);
+  }
+}
+
+function restartPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  const cfg = saveConfig();
+  poll();
+  pollTimer = setInterval(poll, cfg.interval * 1000);
+}
+
+$('toggleConfig').onclick = () => {
+  $('configPanel').classList.toggle('open');
+  $('configPanel').classList.toggle('closed');
+};
+$('checkNow').onclick = poll;
+['owner', 'repo', 'branch', 'interval', 'soundToggle'].forEach((id) => {
+  $(id).addEventListener('change', restartPolling);
+});
+
+if (window.Notification && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+
+loadConfig();
+restartPolling();
+</script>
+</body>
+</html>
