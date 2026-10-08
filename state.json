@@ -1,11 +1,11 @@
 {
   "B0HJ783F18": {
     "in_stock": false,
-    "is_prime": true
+    "is_prime": false
   },
   "B0C52YJQBC": {
     "in_stock": false,
-    "is_prime": true
+    "is_prime": false
   },
   "B0H861Y9Y3": {
     "in_stock": false,
@@ -13,10 +13,10 @@
   },
   "B0H4PPV8MR": {
     "in_stock": false,
-    "is_prime": true
+    "is_prime": false
   },
   "B0HCXR5PWS": {
     "in_stock": false,
-    "is_prime": true
+    "is_prime": false
   }
 }
